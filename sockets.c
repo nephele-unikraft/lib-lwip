@@ -36,6 +36,7 @@
 /* network stub calls */
 #include <uk/config.h>
 #include <sys/time.h>
+#include <sys/socket.h>
 #if CONFIG_LWIP_SOCKET_PPOLL
 #include <signal.h>
 #endif
@@ -895,8 +896,13 @@ EXIT:
 	return ret;
 }
 
+extern int socketpair_af_local(int type, int proto, int sv[2]);
+
 int socketpair(int domain, int type, int protocol, int sv[2])
 {
+	if (domain == AF_LOCAL && type == SOCK_STREAM && protocol == 0)
+		return socketpair_af_local(type, protocol, sv);
+
 	errno = ENOTSUP;
 	return -1;
 }
