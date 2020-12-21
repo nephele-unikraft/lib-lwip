@@ -819,7 +819,7 @@ EXIT:
 	return ret;
 }
 
-int recvmsg(int s, struct msghdr *msg, int flags)
+int socket_recvmsg(int s, struct msghdr *msg, int flags)
 {
 	int ret = 0;
 	struct sock_net_file *file = NULL;
@@ -857,7 +857,7 @@ EXIT:
 	return ret;
 }
 
-int sendmsg(int s, const struct msghdr *message, int flags)
+int socket_sendmsg(int s, const struct msghdr *message, int flags)
 {
 	int ret = 0;
 	struct sock_net_file *file = NULL;
