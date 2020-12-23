@@ -72,7 +72,7 @@
 
 #if CONFIG_LIBUKDEBUG_ENABLE_ASSERT
 #define LWIP_PLATFORM_ASSERT(_x) \
-	do { uk_pr_crit(_x); UK_BUG(); } while (0)
+	do { uk_pr_crit(_x "\n"); UK_BUG(); } while (0)
 #else
 #define LWIP_PLATFORM_ASSERT(_x) \
 	do { } while (0)
