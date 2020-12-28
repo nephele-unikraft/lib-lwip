@@ -68,6 +68,17 @@ static int sock_net_ioctl(struct vnode *s_vnode,
 			unsigned long request,
 			void *buf);
 
+static int sock_can_write(struct vnode *vnode,
+		struct vfscore_file *vfscore_file __unused);
+static int sock_can_read(struct vnode *vnode,
+		struct vfscore_file *vfscore_file __unused);
+static int sock_poll_register(struct vnode *vnode,
+		struct vfscore_file *vfscore_file,
+		struct vfscore_poll *poll);
+static int sock_poll_unregister(struct vnode *vnode,
+		struct vfscore_file *vfscore_file,
+		struct vfscore_poll *poll);
+
 #define sock_net_getattr   ((vnop_getattr_t) vfscore_vop_einval)
 #define sock_net_inactive  ((vnop_inactive_t) vfscore_vop_nullop)
 
@@ -75,6 +86,10 @@ static struct vnops sock_net_vnops = {
 	.vop_close = sock_net_close,
 	.vop_write = sock_net_write,
 	.vop_read  = sock_net_read,
+	.vop_can_read  = sock_can_read,
+	.vop_can_write = sock_can_write,
+	.vop_poll_register = sock_poll_register,
+	.vop_poll_unregister = sock_poll_unregister,
 	.vop_ioctl = sock_net_ioctl,
 	.vop_getattr = sock_net_getattr,
 	.vop_inactive = sock_net_inactive
@@ -511,6 +526,7 @@ out:
 }
 #endif /* CONFIG_LWIP_SOCKET_PPOLL */
 
+#if CONFIG_LWIP_SOCKET_SELECT
 int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
 		struct timeval *timeout)
 {
@@ -644,6 +660,94 @@ int select(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
 
 EXIT:
 	return ret;
+}
+#endif /* CONFIG_LWIP_SOCKET_SELECT */
+
+int lwip_socket_can_write(int s);
+int lwip_socket_can_read(int s);
+
+static int sock_can_write(struct vnode *vnode __unused,
+		struct vfscore_file *vfscore_file)
+{
+	struct sock_net_file *sock_file = NULL;
+	int rc;
+
+	sock_file = sock_net_file_get(vfscore_file->fd);
+	if (PTRISERR(sock_file)) {
+		LWIP_DEBUGF(SOCKETS_DEBUG,
+			    ("failed to identify socket descriptor\n"));
+		rc = -1;
+		SOCK_NET_SET_ERRNO(PTR2ERR(sock_file));
+		goto EXIT;
+	}
+	rc = lwip_socket_can_write(sock_file->sock_fd);
+	vfscore_put_file(sock_file->vfscore_file); /* release refcount */
+EXIT:
+	return rc;
+}
+
+static int sock_can_read(struct vnode *vnode __unused,
+		struct vfscore_file *vfscore_file)
+{
+	struct sock_net_file *sock_file = NULL;
+	int rc;
+
+	sock_file = sock_net_file_get(vfscore_file->fd);
+	if (PTRISERR(sock_file)) {
+		LWIP_DEBUGF(SOCKETS_DEBUG,
+			    ("failed to identify socket descriptor\n"));
+		rc = -1;
+		SOCK_NET_SET_ERRNO(PTR2ERR(sock_file));
+		goto EXIT;
+	}
+	rc = lwip_socket_can_read(sock_file->sock_fd);
+	vfscore_put_file(sock_file->vfscore_file); /* release refcount */
+EXIT:
+	return rc;
+}
+
+int lwip_socket_poll_register(struct vfscore_poll *poll, int s);
+int lwip_socket_poll_unregister(struct vfscore_poll *poll, int s);
+
+static int sock_poll_register(struct vnode *vnode,
+		struct vfscore_file *vfscore_file,
+		struct vfscore_poll *poll)
+{
+	struct sock_net_file *sock_file = NULL;
+	int rc;
+
+	sock_file = sock_net_file_get(vfscore_file->fd);
+	if (PTRISERR(sock_file)) {
+		LWIP_DEBUGF(SOCKETS_DEBUG,
+			    ("failed to identify socket descriptor\n"));
+		rc = -1;
+		SOCK_NET_SET_ERRNO(PTR2ERR(sock_file));
+		goto EXIT;
+	}
+	rc = lwip_socket_poll_register(poll, sock_file->sock_fd);
+	vfscore_put_file(sock_file->vfscore_file); /* release refcount */
+EXIT:
+	return rc;
+}
+static int sock_poll_unregister(struct vnode *vnode,
+		struct vfscore_file *vfscore_file,
+		struct vfscore_poll *poll)
+{
+	struct sock_net_file *sock_file = NULL;
+	int rc;
+
+	sock_file = sock_net_file_get(vfscore_file->fd);
+	if (PTRISERR(sock_file)) {
+		LWIP_DEBUGF(SOCKETS_DEBUG,
+			    ("failed to identify socket descriptor\n"));
+		rc = -1;
+		SOCK_NET_SET_ERRNO(PTR2ERR(sock_file));
+		goto EXIT;
+	}
+	rc = lwip_socket_poll_unregister(poll, sock_file->sock_fd);
+	vfscore_put_file(sock_file->vfscore_file); /* release refcount */
+EXIT:
+	return rc;
 }
 
 int shutdown(int s, int how)

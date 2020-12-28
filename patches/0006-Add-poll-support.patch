@@ -1,0 +1,168 @@
+From 2f13bfd29de2db9a8d7aac98d6fa5cfcd240653b Mon Sep 17 00:00:00 2001
+From: Costin Lupu <costin.lup@gmail.com>
+Date: Mon, 28 Dec 2020 12:34:35 +0200
+Subject: [PATCH] Add poll support
+
+Signed-off-by: Costin Lupu <costin.lupu@cs.pub.ro>
+---
+ src/api/sockets.c | 137 ++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 137 insertions(+)
+
+diff --git a/src/api/sockets.c b/src/api/sockets.c
+index 4ea91bc..e41da61 100644
+--- a/src/api/sockets.c
++++ b/src/api/sockets.c
+@@ -38,6 +38,7 @@
+  */
+ 
+ #include <sys/time.h>
++#include <vfscore/poll.h>
+ 
+ #include "lwip/opt.h"
+ 
+@@ -2460,6 +2461,142 @@ lwip_poll_should_wake(const struct lwip_select_cb *scb, int fd, int has_recveven
+   }
+   return 0;
+ }
++
++static int lwip_pollscan_one(int s, short events,
++		enum lwip_pollscan_opts opts)
++{
++	struct pollfd fd;
++
++	fd.fd = s;
++	fd.events = events;
++	return lwip_pollscan(&fd, 1, opts);
++}
++
++int lwip_socket_can_write(int s)
++{
++	return lwip_pollscan_one(s, POLLOUT, LWIP_POLLSCAN_CLEAR);
++}
++
++int lwip_socket_can_read(int s)
++{
++	return lwip_pollscan_one(s, POLLIN, LWIP_POLLSCAN_CLEAR);
++}
++
++int lwip_socket_poll_register(struct vfscore_poll *poll, int s)
++{
++	struct lwip_select_cb *select_cb = NULL;
++	int rc = 0;
++
++	if (!poll || poll->priv) {
++		set_errno(EINVAL);
++		rc = -1;
++		goto out;
++	}
++
++	rc = lwip_pollscan_one(s, poll->events, LWIP_POLLSCAN_INC_WAIT);
++	if (rc)
++		goto out;
++
++	select_cb = mem_calloc(1, sizeof(struct lwip_select_cb));
++	if (!select_cb) {
++		set_errno(ENOMEM);
++		rc = -1;
++		goto out;
++	}
++
++	if (sys_sem_new(&select_cb->sem, 0) != ERR_OK) {
++		/* failed to create semaphore */
++		set_errno(EAGAIN);
++		rc = -1;
++		goto out;
++	}
++
++	if (poll->events | POLLIN) {
++		select_cb->readset = mem_calloc(1, sizeof(fd_set));
++		if (!select_cb->readset) {
++			set_errno(ENOMEM);
++			rc = -1;
++			goto out;
++		}
++		FD_SET(s, select_cb->readset);
++	}
++	if (poll->events | POLLOUT) {
++		select_cb->writeset = mem_calloc(1, sizeof(fd_set));
++		if (!select_cb->writeset) {
++			set_errno(ENOMEM);
++			rc = -1;
++			goto out;
++		}
++		FD_SET(s, select_cb->writeset);
++	}
++	if (poll->events | POLLERR) {
++		select_cb->exceptset = mem_calloc(1, sizeof(fd_set));
++		if (!select_cb->exceptset) {
++			set_errno(ENOMEM);
++			rc = -1;
++			goto out;
++		}
++		FD_SET(s, select_cb->exceptset);
++	}
++
++	uk_waitq_add(&select_cb->sem.sem.wait, &poll->waiter);
++
++	lwip_link_select_cb(select_cb);
++	poll->priv = select_cb;
++
++out:
++	if (rc) {
++		if (select_cb) {
++			if (select_cb->readset)
++				mem_free(select_cb->readset);
++			if (select_cb->writeset)
++				mem_free(select_cb->writeset);
++			if (select_cb->exceptset)
++				mem_free(select_cb->exceptset);
++			mem_free(select_cb);
++		}
++		lwip_pollscan_one(s, poll->events, LWIP_POLLSCAN_DEC_WAIT);
++	}
++	return rc;
++}
++
++int lwip_socket_poll_unregister(struct vfscore_poll *poll, int s)
++{
++	struct lwip_select_cb *scb;
++	int rc = 0;
++
++	if (!poll || !poll->priv) {
++		set_errno(EINVAL);
++		rc = -1;
++		goto out;
++	}
++
++	scb = poll->priv;
++	lwip_unlink_select_cb(scb);
++
++	uk_waitq_remove(&scb->sem.sem.wait, &poll->waiter);
++
++	if (scb->readset) {
++		LWIP_ASSERT("FD_ISSET(s, scb->readset)", FD_ISSET(s, scb->readset));
++		mem_free(scb->readset);
++	}
++	if (scb->writeset) {
++		LWIP_ASSERT("FD_ISSET(s, scb->writeset)", FD_ISSET(s, scb->writeset));
++		mem_free(scb->writeset);
++	}
++	if (scb->exceptset) {
++		LWIP_ASSERT("FD_ISSET(s, scb->exceptset)", FD_ISSET(s, scb->exceptset));
++		mem_free(scb->exceptset);
++	}
++	sys_sem_free(&scb->sem);
++	mem_free(scb);
++	poll->priv = NULL;
++
++	lwip_pollscan_one(s, poll->events, LWIP_POLLSCAN_DEC_WAIT);
++out:
++	return rc;
++}
++
+ #endif /* LWIP_SOCKET_POLL */
+ 
+ #if LWIP_SOCKET_SELECT || LWIP_SOCKET_POLL
+-- 
+2.20.1
+
