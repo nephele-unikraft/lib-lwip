@@ -173,6 +173,8 @@ void sys_free(void *ptr);
 #define MEMP_NUM_TCP_SEG ((MEMP_NUM_TCP_PCB) * ((TCP_SND_QUEUELEN) / 5))
 #define MEMP_NUM_FRAG_PBUF 32
 
+#define TCP_MSL 0UL /* The maximum segment lifetime in milliseconds */
+
 #endif /* LWIP_TCP */
 
 /**

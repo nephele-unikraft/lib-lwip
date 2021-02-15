@@ -1,0 +1,29 @@
+From 78050d9d830f03a35c3cf1d249e069012f40fa98 Mon Sep 17 00:00:00 2001
+From: Costin Lupu <costin.lup@gmail.com>
+Date: Mon, 15 Feb 2021 12:40:25 +0200
+Subject: [PATCH] Skip adding timeout pcbs when TCP_MSL is 0
+
+Signed-off-by: Costin Lupu <costin.lupu@cs.pub.ro>
+---
+ src/include/lwip/priv/tcp_priv.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/include/lwip/priv/tcp_priv.h b/src/include/lwip/priv/tcp_priv.h
+index 96e07e3..32a1c0d 100644
+--- a/src/include/lwip/priv/tcp_priv.h
++++ b/src/include/lwip/priv/tcp_priv.h
+@@ -391,9 +391,11 @@ extern struct tcp_pcb ** const tcp_pcb_lists[NUM_TCP_PCB_LISTS];
+ 
+ #define TCP_REG(pcbs, npcb)                        \
+   do {                                             \
++    if ((pcbs) != &tcp_tw_pcbs || TCP_MSL != 0) {  \
+     (npcb)->next = *pcbs;                          \
+     *(pcbs) = (npcb);                              \
+     tcp_timer_needed();                            \
++    } else tcp_free(npcb);                         \
+   } while (0)
+ 
+ #define TCP_RMV(pcbs, npcb)                        \
+-- 
+2.20.1
+
