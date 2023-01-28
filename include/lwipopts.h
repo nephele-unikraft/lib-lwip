@@ -67,7 +67,7 @@ void sys_free(void *ptr);
 /* lightweight protection */
 #define SYS_LIGHTWEIGHT_PROT 1
 #define TCPIP_THREAD_NAME "lwip"
-#define TCPIP_MBOX_SIZE 256
+#define TCPIP_MBOX_SIZE 512
 #endif /* CONFIG_LWIP_NOTHREADS */
 
 /**
@@ -223,6 +223,7 @@ void sys_free(void *ptr);
  */
 #if CONFIG_LWIP_DNS
 #define LWIP_DNS 1
+#define DNS_TMR_INTERVAL          60000 /* 60 seconds */
 #else
 #define LWIP_DNS 0
 #endif
@@ -385,5 +386,7 @@ void sys_free(void *ptr);
 #define SNMP_MIB_DEBUG   LWIP_DBG_ON
 #endif /* CONFIG_LWIP_SERVICE_DEBUG */
 #endif /* CONFIG_LWIP_DEBUG */
+
+#define MEMP_SANITY_CHECK 0
 
 #endif /* __LWIP_LWIPOPTS_H__ */

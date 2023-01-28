@@ -36,6 +36,8 @@
 #ifndef _TCP_H_
 #define _TCP_H_
 
+#include <sys/types.h>
+
 typedef	u_long	tcp_seq;
 /*
  * TCP header.

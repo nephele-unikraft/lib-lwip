@@ -3,6 +3,9 @@
 
 #include <uk/config.h>
 #ifdef CONFIG_LWIP_SOCKET
+#if CONFIG_HAVE_LIBC
+#include <poll.h>
+#endif /* CONFIG_HAVE_LIBC */
 #include <lwip/sockets.h>
 /* Taken from musl's netinet/in.h */
 #ifdef CONFIG_LWIP_IPV6
